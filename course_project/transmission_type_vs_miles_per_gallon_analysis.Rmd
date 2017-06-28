@@ -1,0 +1,117 @@
+---
+title: "Transmission Type vs Miles per Gallon Analysis"
+author: "Marcus Vinicius Monteiro de Souza"
+date: "28 de junho de 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+In this project we'll analyze the [Motor Trend Car Road Tests](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html) data set to answer the following questions:
+
+1. Is an automatic or manual transmission better for MPG?
+2. How can we quantify the MPG difference between automatic and manual transmissions?
+
+## Preparations
+
+In this section, we'll install and load the required [R](https://www.r-project.org/) [packages](https://cran.r-project.org/web/packages/):
+
+```{r install_and_load_required_packages}
+if (!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(GGally, lsr, plyr, tidyverse)
+```
+
+and load and preprocess the data for the analysis:
+
+```{r load_and_preprocess_mtcars_data}
+data("mtcars")
+
+mtcars <- mtcars %>%
+  mutate(cyl = as.factor(cyl), vs = as.factor(vs), 
+         am = as.factor(am), am = revalue(am, c('0' = 'automatic', '1' = 'manual')),
+         gear = as.factor(gear), carb = as.factor(carb))
+```
+
+## Exploring the data
+
+The `mtcars` data has 32 observations of the following 11 variables:
+
+| Variable Name | Description                                              |
+| --------------|:---------------------------------------------------------|
+| mpg           | Miles/(US) gallon                                        |
+| cyl           | Number of cylinders                                      |
+| disp          | Displacement (cu.in.)                                    |
+| hp            | Gross horsepower                                         |
+| drat          | Rear axle ratio                                          |
+| wt            | Weight (1000 lbs)                                        |
+| qsec          | 1/4 mile time                                            |
+| vs            | V/S                                                      |
+| am            | Transmission (0 = automatic, 1 = manual)                 |
+| gear          | Number of forward gears                                  |
+| carb          | Number of carburetors                                    |
+
+The observations look like this:
+
+```{r head_mtcars}
+head(mtcars)
+```
+
+Let's see a raw data [box plot](http://www.physics.csbsju.edu/stats/box2.html) of `mpg` by transmission type:
+
+```{r mpg_by_am_boxplot}
+ mtcars %>%
+  ggplot(aes(am, mpg)) + 
+  geom_boxplot(aes(fill = am)) +
+  labs(title = 'Miles per Gallon by Transmission Type', x = 'Transmission Type', 
+       y = 'Miles per Gallon', fill = 'transmission type')
+```
+
+Apparently, manual transmission cars do more miles per gallon than automatic transmission ones... but is it really? Let's analyze it.
+
+## Is an automatic or manual transmission better for MPG?
+
+To answer this question, we'll statistically compare the means of `mpg`s of both automatic and manual transmission populations. First, we'll check if `mpg` can be considered as normally distributed:
+
+```{r mpg_qqplot}
+qqnorm(mtcars$mpg, main = 'Mpg Normal Q-Q Plot')
+qqline(mtcars$mpg, col = 2)
+```
+
+`mpg`'s distribution appears normal. Now, because each observation was taken independently, let's do a [unpaired, or independent samples test](https://en.wikipedia.org/wiki/Student%27s_t-test#Unpaired_and_paired_two-sample_t-tests):
+
+```{r mpg_independent_samples_t_test}
+independentSamplesTTest(mpg ~ am, mtcars)
+```
+
+The conclusion is: the mean `mpg` of automatic transmission cars was *17.147 (std dev = 3.834)*, whereas the mean `mpg` of manual transmission ones was *24.392 (std dev = 6.167)*. A Welch's independent samples t-tests showed that this *7.245* miles per gallon difference between the populations is was **significant** *(t(18.332) = -3.767, p = .001, CI95 = [-11.28, -3.21], d = 1.411)*, rejecting the null hypothesis that population means equal for both groups and suggesting that **manual transmission cars are better for `mpg`**.
+
+## How can we quantify the MPG difference between automatic and manual transmissions?
+
+To answer this question we'll [fit a multiple regression model](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/lm.html) for `mpg`, [check the residuals](http://blog.minitab.com/blog/adventures-in-statistics-2/why-you-need-to-check-your-residual-plots-for-regression-analysis) and then draw our conclusion.
+
+### Model Selection
+
+```{r mpg_model_fit}
+mpg.model <- lm(mpg ~ ., mtcars)
+# Select a formula-based model by AIC
+mpg.model <- step(mpg.model, trace = FALSE)
+summary(mpg.model)
+```
+
+### Checking the residuals
+
+```{r mpg_model_checking_the_residuals}
+ggnostic(mpg.model, aes(color = am))
+```
+
+We can see that the residuals for `am` are within the lines, appearing to be normally distributed. We can now draw our conclusion.
+
+### Conclusion
+
+Our final model has Adjusted R-squared value of 0.8401, meaning that it explains 84% of the variation in `mpg`. According to it, **manual transmission cars can run 1.80921 miles per gallon more than automatic transmission ones**.
